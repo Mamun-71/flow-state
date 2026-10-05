@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "flowstate", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3000, "autoPort": true }
+    { "name": "flowstate", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3005, "autoPort": false }
   ]
 }

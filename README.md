@@ -29,7 +29,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and sign in.
+Open http://localhost:3005 and sign in (the dev server always uses port 3005).
 
 > The secret key (`SUPABASE_SECRET_KEY`) is used only on the server, only for creating users, and only after checking the caller is the super admin. Never give it a `NEXT_PUBLIC_` prefix and never commit it.
 
