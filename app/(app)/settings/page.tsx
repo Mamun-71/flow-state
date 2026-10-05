@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
-import { DownloadIcon, LogOutIcon } from "lucide-react";
+import Link from "next/link";
+import { DownloadIcon, KeyRoundIcon, LogOutIcon, ShieldCheckIcon } from "lucide-react";
 import { signOut } from "@/actions/auth";
 import { ThemePicker } from "@/components/theme-picker";
+import { ProfileForm } from "@/components/profile-form";
+import { getCurrentProfile } from "@/lib/data";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { SESSION_MAX_AGE_DAYS, sessionDaysLeft } from "@/lib/auth-config";
@@ -15,10 +18,18 @@ export default async function SettingsPage() {
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
   const daysLeft = sessionDaysLeft(claims);
+  const profile = await getCurrentProfile();
 
   return (
     <div className="mx-auto grid max-w-2xl gap-6">
       <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Settings</h1>
+
+      <Section title="Profile">
+        <ProfileForm displayName={profile?.display_name ?? ""} />
+        <Link href="/reset-password" className={cn(buttonVariants({ variant: "outline" }), "mt-4 h-9")}>
+          <KeyRoundIcon /> Change password
+        </Link>
+      </Section>
 
       <Section title="Appearance" description="Follows your system setting unless you pick one.">
         <ThemePicker />
@@ -42,7 +53,19 @@ export default async function SettingsPage() {
         <dl className="grid gap-2 text-sm">
           <div className="flex justify-between gap-4">
             <dt className="text-muted-foreground">Signed in as</dt>
-            <dd className="truncate">{String(claims?.email ?? "")}</dd>
+            <dd className="truncate">{profile?.email ?? String(claims?.email ?? "")}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Role</dt>
+            <dd className="inline-flex items-center gap-1">
+              {profile?.role === "super_admin" ? (
+                <>
+                  <ShieldCheckIcon className="size-4 text-primary" aria-hidden="true" /> Super admin
+                </>
+              ) : (
+                "User"
+              )}
+            </dd>
           </div>
           {daysLeft !== null && (
             <div className="flex justify-between gap-4">

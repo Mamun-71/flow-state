@@ -36,3 +36,11 @@ export async function requireUser() {
   if (!userId) throw new Error("Not signed in");
   return { supabase, userId };
 }
+
+/** Like requireUser, but also requires the super admin role (checked in the database). */
+export async function requireSuperAdmin() {
+  const { supabase, userId } = await requireUser();
+  const { data: isAdmin } = await supabase.rpc("is_super_admin");
+  if (!isAdmin) throw new Error("Not allowed");
+  return { supabase, userId };
+}

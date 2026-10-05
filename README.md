@@ -10,9 +10,16 @@ Next.js 16 (App Router) · Tailwind CSS 4 · shadcn/ui (Base UI) · Supabase (Po
 
 1. Create a free project at [supabase.com](https://supabase.com).
 2. Open **SQL Editor → New query**, paste all of [`supabase/schema.sql`](supabase/schema.sql) and run it.
-3. **Authentication → Users → Add user**: create your own account (email + password, tick "Auto confirm").
-4. **Authentication → Sign In / Providers**: turn off **Allow new users to sign up**.
-5. **Project Settings → API**: copy the project URL and the **publishable** (anon) key.
+   Then do the same with [`supabase/002_users_and_admin.sql`](supabase/002_users_and_admin.sql) (user profiles and the super admin role).
+3. **Authentication → Users → Add user**: create the super admin account `dev.almamunsalauddin@gmail.com` (tick "Auto confirm"). It gets the `super_admin` role automatically; every other account is a normal `user`.
+4. **Authentication → Sign In / Providers**: turn off **Allow new users to sign up**. From now on the super admin adds users on the in-app **Users** page.
+5. **Project Settings → API Keys**: copy the project URL, the **publishable** key, and the **secret** key (server-only, for creating users).
+
+### Users and roles
+
+- Every user's categories, tasks and time are private to them (Row Level Security).
+- The super admin sees a **Users** page with each user's totals (tasks, hours) — not their tasks — and can add users with a temporary password. Users change their password and name in **Settings**.
+- To make another email a super admin, edit `default_role_for` in `002_users_and_admin.sql`, or run `update public.profiles set role = 'super_admin' where email = '…';` in the SQL editor.
 
 ### 2. Local app
 
@@ -24,7 +31,7 @@ npm run dev
 
 Open http://localhost:3000 and sign in.
 
-> Never put the Supabase service-role (secret) key in this project. Row Level Security keeps every row private to its owner.
+> The secret key (`SUPABASE_SECRET_KEY`) is used only on the server, only for creating users, and only after checking the caller is the super admin. Never give it a `NEXT_PUBLIC_` prefix and never commit it.
 
 ### 3. Deploy (Vercel Hobby)
 

@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, dayStart, splitByDay } from "@/lib/dates";
 import { sessionSeconds } from "@/lib/time";
-import type { Category, Subcategory, Task, TimeSession } from "@/lib/database.types";
+import type { AdminUserRow, Category, Profile, Subcategory, Task, TimeSession } from "@/lib/database.types";
 
 export type CategoryWithSubs = Category & { subcategories: Subcategory[] };
 
@@ -181,4 +181,21 @@ export async function getDayBoard(date: string, includeCarriedOver: boolean): Pr
     runningCountedSeconds,
     plannedMinutes: tasks.reduce((sum, t) => sum + t.estimated_minutes, 0),
   };
+}
+
+export async function getCurrentProfile(): Promise<Profile | null> {
+  const supabase = await createClient();
+  const { data: auth } = await supabase.auth.getClaims();
+  const userId = auth?.claims?.sub;
+  if (!userId) return null;
+  const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+  return data;
+}
+
+/** Super admin only (enforced in the database function). */
+export async function getAdminUsers(): Promise<AdminUserRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_user_overview");
+  if (error) throw error;
+  return data ?? [];
 }

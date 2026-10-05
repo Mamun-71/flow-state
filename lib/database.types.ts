@@ -4,6 +4,21 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type TaskStatus = "todo" | "in_progress" | "done";
+export type UserRole = "user" | "super_admin";
+
+export type AdminUserRow = {
+  id: string;
+  email: string;
+  display_name: string | null;
+  role: UserRole;
+  created_at: string;
+  last_sign_in_at: string | null;
+  task_count: number;
+  done_count: number;
+  tracked_seconds: number;
+  tracked_seconds_30d: number;
+  last_active_at: string | null;
+};
 export type SessionSource = "timer" | "manual";
 
 export type Database = {
@@ -102,6 +117,26 @@ export type Database = {
           },
         ];
       };
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          display_name: string | null;
+          role: UserRole;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          display_name?: string | null;
+          role?: UserRole;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: { display_name?: string | null };
+        Relationships: [];
+      };
       time_sessions: {
         Row: {
           id: string;
@@ -140,6 +175,8 @@ export type Database = {
       complete_task: { Args: { p_task_id: string }; Returns: undefined };
       stop_timer_at: { Args: { p_ended_at: string }; Returns: undefined };
       reorder_tasks: { Args: { p_status: string; p_ids: string[] }; Returns: undefined };
+      is_super_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      admin_user_overview: { Args: Record<PropertyKey, never>; Returns: AdminUserRow[] };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
@@ -150,3 +187,4 @@ export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Subcategory = Database["public"]["Tables"]["subcategories"]["Row"];
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
 export type TimeSession = Database["public"]["Tables"]["time_sessions"]["Row"];
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"];

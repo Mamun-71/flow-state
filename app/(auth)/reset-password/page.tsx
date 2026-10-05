@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { updatePassword } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,9 @@ export default function ResetPasswordPage() {
           {pending ? "Saving…" : "Save password"}
         </Button>
       </form>
+      <Link href="/settings" className="mt-6 block text-center text-sm text-muted-foreground hover:text-foreground">
+        Cancel
+      </Link>
     </>
   );
 }
