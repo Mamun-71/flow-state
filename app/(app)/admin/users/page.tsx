@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ShieldCheckIcon } from "lucide-react";
 import { AddUserForm } from "@/components/add-user-form";
+import { PageHeader } from "@/components/page-header";
+import { UsersIcon } from "@/components/icons";
 import { getAdminUsers, getCurrentProfile } from "@/lib/data";
 import { formatDate, dayOf } from "@/lib/dates";
 import { formatMinutesLong } from "@/lib/time";
@@ -19,13 +21,17 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Users</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {users.length} {users.length === 1 ? "user" : "users"} · {formatMinutesLong(totalHours / 60)} tracked in the last 30 days.
-          Each user&apos;s tasks stay private; you see totals only.
-        </p>
-      </div>
+      <PageHeader
+        icon={<UsersIcon className="size-6.5" />}
+        eyebrow="Super admin"
+        title="Users"
+        description={
+          <>
+            {users.length} {users.length === 1 ? "user" : "users"} · {formatMinutesLong(totalHours / 60)} tracked in the last 30 days.
+            Each user&apos;s tasks stay private; you see totals only.
+          </>
+        }
+      />
 
       <AddUserForm />
 

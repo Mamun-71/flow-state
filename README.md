@@ -10,7 +10,7 @@ Next.js 16 (App Router) · Tailwind CSS 4 · shadcn/ui (Base UI) · Supabase (Po
 
 1. Create a free project at [supabase.com](https://supabase.com).
 2. Open **SQL Editor → New query**, paste all of [`supabase/schema.sql`](supabase/schema.sql) and run it.
-   Then do the same with [`supabase/002_users_and_admin.sql`](supabase/002_users_and_admin.sql) (user profiles and the super admin role).
+   Then do the same, in order, with [`supabase/002_users_and_admin.sql`](supabase/002_users_and_admin.sql) (user profiles and the super admin role) and [`supabase/003_editable_actual_time.sql`](supabase/003_editable_actual_time.sql) (editing a task's Actual time).
 3. **Authentication → Users → Add user**: create the super admin account `dev.almamunsalauddin@gmail.com` (tick "Auto confirm"). It gets the `super_admin` role automatically; every other account is a normal `user`.
 4. **Authentication → Sign In / Providers**: turn off **Allow new users to sign up**. From now on the super admin adds users on the in-app **Users** page.
 5. **Project Settings → API Keys**: copy the project URL, the **publishable** key, and the **secret** key (server-only, for creating users).

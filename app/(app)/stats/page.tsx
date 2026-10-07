@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ArrowDownRightIcon, ArrowUpRightIcon, MinusIcon, TargetIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 import { PeriodPicker } from "@/components/period-picker";
+import { PageHeader } from "@/components/page-header";
+import { StatsIcon } from "@/components/icons";
 import { HoursChart } from "@/components/hours-chart";
 import { CategoryBreakdown } from "@/components/category-breakdown";
 import { getStats, type EstimationRow } from "@/lib/stats";
@@ -17,15 +19,12 @@ export default async function StatsPage({ searchParams }: PageProps<"/stats">) {
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Statistics</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Last {periodLabel(period)} · {formatDate(stats.startDate, "d MMM")} – {formatDate(stats.endDate, "d MMM yyyy")}
-          </p>
-        </div>
-        <PeriodPicker value={period} />
-      </div>
+      <PageHeader
+        icon={<StatsIcon className="size-6.5" />}
+        title="Statistics"
+        description={`Last ${periodLabel(period)} · ${formatDate(stats.startDate, "d MMM")} – ${formatDate(stats.endDate, "d MMM yyyy")}`}
+        actions={<PeriodPicker value={period} />}
+      />
 
       <section aria-label="Summary" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label="Tracked" value={formatMinutes(stats.totalSeconds / 60)} unit="h">

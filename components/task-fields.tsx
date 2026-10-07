@@ -83,40 +83,12 @@ export function SubcategorySelect({
   );
 }
 
-export function EstimateInput({
-  register,
-  errors,
-  idPrefix,
-  className,
-  hideLabel,
-}: FieldProps & { className?: string; hideLabel?: boolean }) {
-  const id = `${idPrefix}-estimate`;
-  return (
-    <div className={cn("grid gap-1.5", className)}>
-      <Label htmlFor={id} className={cn(hideLabel && "sr-only")}>
-        Estimate (HH:MM)
-      </Label>
-      <Input
-        id={id}
-        inputMode="numeric"
-        placeholder="1:30"
-        autoComplete="off"
-        className="h-9 tabular-nums"
-        aria-invalid={Boolean(errors.estimate)}
-        aria-describedby={errors.estimate ? `${id}-error` : undefined}
-        {...register("estimate")}
-      />
-      <FieldError id={`${id}-error`} message={errors.estimate?.message} />
-    </div>
-  );
-}
-
 export function DateInput({ register, errors, idPrefix, className }: FieldProps & { className?: string }) {
   const id = `${idPrefix}-date`;
   return (
     <div className={cn("grid gap-1.5", className)}>
       <Label htmlFor={id}>Planned for</Label>
-      <Input id={id} type="date" className="h-9" aria-invalid={Boolean(errors.plannedDate)} {...register("plannedDate")} />
+      <Input id={id} type="date" className="h-10" aria-invalid={Boolean(errors.plannedDate)} {...register("plannedDate")} />
       <FieldError message={errors.plannedDate?.message} />
     </div>
   );

@@ -32,7 +32,7 @@ export function TimerBar() {
           transition={{ type: "spring", stiffness: 420, damping: 34 }}
           className={cn(
             "fixed inset-x-0 z-40 px-3 bottom-[calc(4.25rem+env(safe-area-inset-bottom))]",
-            "md:sticky md:top-14 md:bottom-auto md:px-0",
+            "md:sticky md:top-16 md:bottom-auto md:px-0",
           )}
         >
           <RunningTimerBar />

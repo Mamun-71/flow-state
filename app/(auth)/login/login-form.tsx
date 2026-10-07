@@ -14,7 +14,7 @@ export function LoginForm() {
     <form action={action} className="grid gap-4">
       <div className="grid gap-1.5">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required className="h-10" />
+        <Input id="email" name="email" type="email" autoComplete="email" required className="h-11" />
       </div>
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between">
@@ -23,14 +23,14 @@ export function LoginForm() {
             Forgot password?
           </Link>
         </div>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required className="h-10" />
+        <Input id="password" name="password" type="password" autoComplete="current-password" required className="h-11" />
       </div>
       {state?.error && (
         <p role="alert" className="text-sm text-destructive">
           {state.error}
         </p>
       )}
-      <Button type="submit" size="lg" className="mt-2 h-10" disabled={pending}>
+      <Button type="submit" size="lg" className="mt-2 h-11 rounded-xl shadow-md shadow-primary/20" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>
     </form>

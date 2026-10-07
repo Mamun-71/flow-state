@@ -6,7 +6,6 @@ import {
   ArrowRightIcon,
   CalendarIcon,
   CheckIcon,
-  ClockPlusIcon,
   MoreHorizontalIcon,
   PauseIcon,
   PencilIcon,
@@ -26,6 +25,7 @@ import {
 import { formatMinutes } from "@/lib/time";
 import { formatDayLabel } from "@/lib/dates";
 import type { TaskView } from "@/lib/data";
+import { ActualIcon, EstimateIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 export type CardActions = {
@@ -34,7 +34,7 @@ export type CardActions = {
   onDone: (task: TaskView) => void;
   onReopen: (task: TaskView) => void;
   onDelete: (task: TaskView) => void;
-  onOpen: (task: TaskView, tab?: "details" | "time") => void;
+  onOpen: (task: TaskView) => void;
   onMove?: (task: TaskView, status: "todo" | "in_progress") => void;
   onMoveToToday?: (task: TaskView) => void;
 };
@@ -94,17 +94,23 @@ export const TaskCard = forwardRef<HTMLDivElement, Props>(function TaskCard(
         }
       }}
       className={cn(
-        "group/card relative cursor-pointer rounded-xl border bg-card p-3 text-card-foreground shadow-xs transition-[box-shadow,opacity,border-color] outline-none select-none",
-        "hover:border-foreground/15 focus-visible:ring-3 focus-visible:ring-ring/50",
+        "group/card relative cursor-pointer overflow-hidden rounded-2xl border bg-card py-3.5 pr-3 pl-4 text-card-foreground shadow-xs transition-[box-shadow,opacity,border-color,transform] outline-none select-none",
+        "hover:-translate-y-px hover:border-foreground/15 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50",
         selected && "border-ring/60",
-        running && "border-status-progress/50 shadow-sm ring-1 ring-status-progress/25",
-        done && "opacity-65 hover:opacity-90",
+        running && "border-status-progress/40 bg-gradient-to-br from-status-progress/[0.07] to-card shadow-md ring-1 ring-status-progress/20",
+        done && "opacity-70 hover:opacity-95",
         dragging && "opacity-40",
         overlay && "cursor-grabbing shadow-xl ring-1 ring-foreground/10",
         className,
       )}
       {...rest}
     >
+      {/* Category accent */}
+      <span
+        className="absolute inset-y-3 left-0 w-1 rounded-r-full"
+        style={{ backgroundColor: task.category?.color ?? "var(--status-todo)" }}
+        aria-hidden="true"
+      />
       <div className="flex items-start gap-3">
         {done ? (
           <motion.span
@@ -149,19 +155,30 @@ export const TaskCard = forwardRef<HTMLDivElement, Props>(function TaskCard(
               </span>
             )}
           </p>
-          <div className="mt-2.5 flex items-center gap-2.5">
-            <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+          <div className="mt-3 flex items-center gap-2 text-xs tabular-nums">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium",
+                over ? "bg-status-over/12 text-status-over" : running ? "bg-primary/10 text-primary" : "bg-muted text-foreground",
+              )}
+              title="Actual time"
+            >
+              <ActualIcon className="size-3.5" />
+              {formatMinutes(seconds / 60)}
+            </span>
+            <span className="inline-flex items-center gap-1 text-muted-foreground" title="Estimated time">
+              <EstimateIcon className="size-3.5" />
+              {formatMinutes(task.estimated_minutes)}
+            </span>
+            <div className="ml-1 h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
               <div
                 className={cn(
                   "h-full rounded-full transition-[width] duration-500",
-                  over ? "bg-status-over" : done ? "bg-status-done" : running ? "bg-status-progress" : "bg-status-todo",
+                  over ? "bg-status-over" : done ? "bg-status-done" : running ? "bg-status-progress" : "bg-status-todo/70",
                 )}
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
-            <span className={cn("text-xs tabular-nums", over ? "font-medium text-status-over" : "text-muted-foreground")}>
-              {formatMinutes(seconds / 60)} / {formatMinutes(task.estimated_minutes)}
-            </span>
           </div>
         </div>
 
@@ -179,11 +196,8 @@ export const TaskCard = forwardRef<HTMLDivElement, Props>(function TaskCard(
             <MoreHorizontalIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => onOpen(task, "details")}>
-              <PencilIcon /> Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onOpen(task, "time")}>
-              <ClockPlusIcon /> Add time
+            <DropdownMenuItem onClick={() => onOpen(task)}>
+              <PencilIcon /> Edit task & time
             </DropdownMenuItem>
             {onMoveToToday && (
               <DropdownMenuItem onClick={() => onMoveToToday(task)}>

@@ -176,6 +176,7 @@ export type Database = {
       stop_timer_at: { Args: { p_ended_at: string }; Returns: undefined };
       reorder_tasks: { Args: { p_status: string; p_ids: string[] }; Returns: undefined };
       is_super_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      set_task_actual: { Args: { p_task_id: string; p_seconds: number; p_anchor: string }; Returns: undefined };
       admin_user_overview: { Args: Record<PropertyKey, never>; Returns: AdminUserRow[] };
     };
     Enums: { [_ in never]: never };

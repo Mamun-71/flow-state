@@ -12,8 +12,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <TimerProvider running={running} serverNow={serverNow}>
       <AppHeader isAdmin={isAdmin} name={name} />
       <TimerBar />
-      <main className="mx-auto w-full max-w-6xl px-4 pt-5 pb-44 md:px-6 md:pt-8 md:pb-16">{children}</main>
-      <BottomNav isAdmin={isAdmin} />
+      <main className="mx-auto w-full max-w-6xl px-4 pt-6 pb-44 md:px-6 md:pt-10 md:pb-20">{children}</main>
+      <BottomNav />
     </TimerProvider>
   );
 }

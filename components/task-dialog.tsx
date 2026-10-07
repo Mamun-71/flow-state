@@ -1,101 +1,109 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
-import { updateTask } from "@/actions/tasks";
-import { addManualTime, deleteSession, updateSession } from "@/actions/sessions";
+import { saveTask } from "@/actions/tasks";
+import { deleteSession, updateSession } from "@/actions/sessions";
 import { useTaskSeconds } from "@/hooks/use-elapsed";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+import { useTimer } from "@/components/timer-provider";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  CategorySelect,
-  DateInput,
-  DescriptionInput,
-  EstimateInput,
-  FieldError,
-  SubcategorySelect,
-} from "@/components/task-fields";
+import { CategorySelect, DateInput, DescriptionInput, FieldError, SubcategorySelect } from "@/components/task-fields";
+import { DurationInput } from "@/components/duration-input";
+import { ActualIcon, AddTaskIcon, EstimateIcon } from "@/components/icons";
 import { taskSchema, type TaskFormInput, type TaskFormValues } from "@/lib/validation";
-import { formatDayLabel, dayOf, formatTime, toLocalInput, todayStr } from "@/lib/dates";
-import { formatClock, formatMinutes, formatMinutesLong, sessionSeconds } from "@/lib/time";
+import { dayOf, formatDayLabel, formatTime, toLocalInput } from "@/lib/dates";
+import { formatClock, formatMinutesLong, sessionSeconds } from "@/lib/time";
 import type { CategoryWithSubs, TaskView } from "@/lib/data";
-import type { TimeSession } from "@/lib/database.types";
+import type { TaskStatus, TimeSession } from "@/lib/database.types";
 import { cn } from "@/lib/utils";
 import { safe } from "@/lib/safe";
 
-type Tab = "details" | "time";
+export const LAST_CATEGORY_KEY = "flowstate:last-category";
 
+const STATUS_OPTIONS: { value: TaskStatus; label: string; dot: string; active: string }[] = [
+  { value: "todo", label: "To Do", dot: "bg-status-todo", active: "border-status-todo/50 bg-status-todo/10 text-foreground" },
+  { value: "in_progress", label: "In Progress", dot: "bg-status-progress", active: "border-status-progress/50 bg-status-progress/10 text-foreground" },
+  { value: "done", label: "Done", dot: "bg-status-done", active: "border-status-done/50 bg-status-done/12 text-foreground" },
+];
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function splitMinutes(total: number) {
+  const m = Math.max(0, Math.round(total));
+  return { h: String(Math.floor(m / 60)), m: pad(m % 60) };
+}
+
+function readLastCategory(categories: CategoryWithSubs[]) {
+  try {
+    const last = localStorage.getItem(LAST_CATEGORY_KEY);
+    if (last && categories.some((c) => c.id === last)) return last;
+  } catch {}
+  return categories.length === 1 ? categories[0].id : "";
+}
+
+/** One modal for adding and editing a task. `task` undefined means "Add". */
 export function TaskDialog({
-  task,
   open,
   onOpenChange,
-  tab,
-  onTabChange,
+  task,
+  defaultDate,
   categories,
+  onDelete,
 }: {
-  task: TaskView | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  tab: Tab;
-  onTabChange: (tab: Tab) => void;
+  task: TaskView | undefined;
+  defaultDate: string;
   categories: CategoryWithSubs[];
+  onDelete?: (task: TaskView) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-lg">
-        {task && (
-          <>
-            <DialogHeader className="border-b p-5 pr-12">
-              <DialogTitle className="text-lg leading-snug break-words">{task.title}</DialogTitle>
-              <DialogDescription render={<div />}>
-                <TaskSummary task={task} />
-              </DialogDescription>
-            </DialogHeader>
-            <Tabs value={tab} onValueChange={(v) => onTabChange(v as Tab)} className="p-5">
-              <TabsList className="w-full">
-                <TabsTrigger value="details">Details</TabsTrigger>
-                <TabsTrigger value="time">Time ({task.sessions.length})</TabsTrigger>
-              </TabsList>
-              <TabsContent value="details" className="pt-3">
-                <DetailsForm key={task.id} task={task} categories={categories} onSaved={() => onOpenChange(false)} />
-              </TabsContent>
-              <TabsContent value="time" className="pt-3">
-                <TimeTab task={task} />
-              </TabsContent>
-            </Tabs>
-          </>
+      <DialogContent className="max-h-[calc(100dvh-1.5rem)] gap-0 overflow-y-auto p-0 sm:max-w-xl">
+        {open && (
+          <TaskForm
+            key={task?.id ?? `new-${defaultDate}`}
+            task={task}
+            defaultDate={defaultDate}
+            categories={categories}
+            onDone={() => onOpenChange(false)}
+            onDelete={onDelete}
+          />
         )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function TaskSummary({ task }: { task: TaskView }) {
-  const { seconds, running } = useTaskSeconds(task.id, task.trackedSeconds);
-  const over = seconds > task.estimated_minutes * 60;
-  return (
-    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="inline-flex items-center gap-1.5">
-        <span className="size-2 rounded-full" style={{ backgroundColor: task.category?.color ?? "var(--status-todo)" }} />
-        {task.category?.name}
-        {task.subcategory && ` · ${task.subcategory.name}`}
-      </span>
-      <span aria-hidden="true">·</span>
-      <span className={cn("tabular-nums", over && "font-medium text-status-over")}>
-        {running ? formatClock(seconds) : formatMinutes(seconds / 60)} tracked of {formatMinutes(task.estimated_minutes)}
-      </span>
-    </span>
-  );
-}
-
-function DetailsForm({ task, categories, onSaved }: { task: TaskView; categories: CategoryWithSubs[]; onSaved: () => void }) {
+function TaskForm({
+  task,
+  defaultDate,
+  categories,
+  onDone,
+  onDelete,
+}: {
+  task: TaskView | undefined;
+  defaultDate: string;
+  categories: CategoryWithSubs[];
+  onDone: () => void;
+  onDelete?: (task: TaskView) => void;
+}) {
+  const isEdit = Boolean(task);
   const [pending, startTransition] = useTransition();
+  const { running } = useTimer();
+  const isRunning = Boolean(task && running?.task.id === task.id);
+  const live = useTaskSeconds(task?.id ?? "", task?.trackedSeconds ?? 0);
+
+  const estimate = splitMinutes(task?.estimated_minutes ?? 0);
+  const actual = splitMinutes((task?.trackedSeconds ?? 0) / 60);
+
   const { register, handleSubmit, formState, control, setValue, getValues, setError } = useForm<
     TaskFormInput,
     unknown,
@@ -103,145 +111,217 @@ function DetailsForm({ task, categories, onSaved }: { task: TaskView; categories
   >({
     resolver: zodResolver(taskSchema),
     defaultValues: {
-      title: task.title,
-      categoryId: task.category_id,
-      subcategoryId: task.subcategory_id ?? "",
-      description: task.description ?? "",
-      plannedDate: task.planned_date,
-      estimate: formatMinutes(task.estimated_minutes),
+      title: task?.title ?? "",
+      categoryId: task?.category_id ?? readLastCategory(categories),
+      subcategoryId: task?.subcategory_id ?? "",
+      description: task?.description ?? "",
+      plannedDate: task?.planned_date ?? defaultDate,
+      status: task?.status ?? "todo",
+      estimateHours: task ? estimate.h : "",
+      estimateMinutes: task ? estimate.m : "",
+      actualHours: task ? actual.h : "",
+      actualMinutes: task ? actual.m : "",
+      actualChanged: false,
     },
   });
   const categoryId = useWatch({ control, name: "categoryId" });
+  const status = useWatch({ control, name: "status" });
   const category = categories.find((c) => c.id === categoryId);
+  const errors = formState.errors;
 
-  // Clear the subcategory when the category changes to one it doesn't belong to.
+  // Clear the subcategory when it doesn't belong to the newly chosen category.
   useEffect(() => {
     const sub = getValues("subcategoryId");
     if (sub && !category?.subcategories.some((s) => s.id === sub)) setValue("subcategoryId", "");
   }, [category, getValues, setValue]);
 
-  const submit = handleSubmit(() =>
+  if (categories.length === 0) {
+    return (
+      <div className="p-6">
+        <DialogTitle className="text-lg">Create a category first</DialogTitle>
+        <DialogDescription className="mt-1">Every task belongs to a category, like Study, Work or Health.</DialogDescription>
+        <Link href="/categories" className={cn(buttonVariants(), "mt-5 h-10 px-4")} onClick={onDone}>
+          Go to Categories
+        </Link>
+      </div>
+    );
+  }
+
+  const submit = handleSubmit((values) => {
+    const actualChanged = Boolean(formState.dirtyFields.actualHours || formState.dirtyFields.actualMinutes);
+    try {
+      localStorage.setItem(LAST_CATEGORY_KEY, values.categoryId);
+    } catch {}
     startTransition(async () => {
-      const result = await safe(updateTask(task.id, getValues()));
+      const result = await safe(saveTask(task?.id ?? null, { ...getValues(), actualChanged }));
       if (result.ok) {
-        toast.success("Saved");
-        onSaved();
+        toast.success(isEdit ? "Task saved" : "Task added");
+        onDone();
       } else {
         toast.error(result.error);
         for (const [field, message] of Object.entries(result.fieldErrors ?? {})) {
           setError(field as keyof TaskFormInput, { message });
         }
       }
-    }),
-  );
-
-  const fieldProps = { register, errors: formState.errors, idPrefix: "edit" };
-
-  return (
-    <form onSubmit={submit} className="grid gap-4">
-      <div className="grid gap-1.5">
-        <Label htmlFor="edit-title">Title</Label>
-        <Input id="edit-title" maxLength={120} className="h-9" aria-invalid={Boolean(formState.errors.title)} {...register("title")} />
-        <FieldError message={formState.errors.title?.message} />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <CategorySelect {...fieldProps} categories={categories} />
-        <SubcategorySelect {...fieldProps} category={category} />
-        <EstimateInput {...fieldProps} />
-        <DateInput {...fieldProps} />
-      </div>
-      <DescriptionInput {...fieldProps} />
-      <div className="flex justify-end">
-        <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save changes"}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-function TimeTab({ task }: { task: TaskView }) {
-  return (
-    <div className="grid gap-5">
-      <AddTimeForm task={task} />
-      <div>
-        <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">Session history</h3>
-        {task.sessions.length === 0 ? (
-          <p className="rounded-lg border border-dashed px-3 py-5 text-center text-sm text-muted-foreground">
-            No time tracked yet. Press play, or add time above.
-          </p>
-        ) : (
-          <ul className="divide-y rounded-xl border">
-            {task.sessions.map((s) => (
-              <SessionRow key={s.id} session={s} />
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AddTimeForm({ task }: { task: TaskView }) {
-  const today = todayStr();
-  const [date, setDate] = useState(task.planned_date <= today ? task.planned_date : today);
-  const [startTime, setStartTime] = useState("09:00");
-  const [duration, setDuration] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [pending, startTransition] = useTransition();
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    startTransition(async () => {
-      const result = await safe(addManualTime({ taskId: task.id, date, startTime, duration }));
-      if (result.ok) {
-        toast.success("Time added");
-        setDuration("");
-        setErrors({});
-      } else {
-        setErrors(result.fieldErrors ?? {});
-        toast.error(result.error);
-      }
     });
-  };
+  });
+
+  const fieldProps = { register, errors, idPrefix: "task" };
+  const estimateError = errors.estimateHours?.message ?? errors.estimateMinutes?.message;
+  const actualError = errors.actualHours?.message ?? errors.actualMinutes?.message;
 
   return (
-    <form onSubmit={submit} className="rounded-xl bg-muted/50 p-3">
-      <p className="mb-2.5 text-sm font-medium">Add time worked without the timer</p>
-      <div className="grid grid-cols-[1fr_auto_auto_auto] items-end gap-2">
-        <div className="grid gap-1">
-          <Label htmlFor="manual-date" className="text-xs">
-            Date
-          </Label>
-          <Input id="manual-date" type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} className="h-9" required />
+    <form onSubmit={submit} noValidate>
+      <div className="flex items-start gap-3 border-b bg-gradient-to-b from-primary/[0.06] to-transparent px-5 pt-5 pb-4 pr-12">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+          {isEdit ? <PencilIcon className="size-4.5" /> : <AddTaskIcon className="size-5.5" />}
+        </span>
+        <div className="min-w-0">
+          <DialogTitle className="text-lg font-semibold">{isEdit ? "Edit task" : "New task"}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? "Change anything, including the time, even after it's done." : "Plan it with an estimate, then press play when you start."}
+          </DialogDescription>
         </div>
-        <div className="grid gap-1">
-          <Label htmlFor="manual-start" className="text-xs">
-            Start
-          </Label>
-          <Input id="manual-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-9 w-24" required />
-        </div>
-        <div className="grid gap-1">
-          <Label htmlFor="manual-duration" className="text-xs">
-            Duration
-          </Label>
-          <Input
-            id="manual-duration"
-            placeholder="0:45"
-            inputMode="numeric"
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            className="h-9 w-20 tabular-nums"
-            aria-invalid={Boolean(errors.duration)}
-            required
-          />
-        </div>
-        <Button type="submit" className="h-9" disabled={pending}>
-          Add
-        </Button>
       </div>
-      <FieldError message={errors.duration ?? errors.date ?? errors.startTime} />
+
+      <div className="grid gap-5 p-5">
+        <div className="grid gap-1.5">
+          <Label htmlFor="task-title">Title</Label>
+          <Input
+            id="task-title"
+            autoFocus={!isEdit}
+            maxLength={120}
+            placeholder="What will you work on?"
+            className="h-11 text-base"
+            aria-invalid={Boolean(errors.title)}
+            {...register("title")}
+          />
+          <FieldError message={errors.title?.message} />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <CategorySelect {...fieldProps} categories={categories} />
+          <SubcategorySelect {...fieldProps} category={category} />
+        </div>
+
+        <fieldset className="grid gap-2">
+          <legend className="mb-2 text-sm font-medium">Status</legend>
+          <div className="grid grid-cols-3 gap-2">
+            {STATUS_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className={cn(
+                  "flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border text-sm text-muted-foreground transition-colors",
+                  "hover:bg-muted/60 has-focus-visible:ring-3 has-focus-visible:ring-ring/50",
+                  status === opt.value && cn("font-medium", opt.active),
+                )}
+              >
+                <input type="radio" value={opt.value} className="sr-only" {...register("status")} />
+                <span className={cn("size-2.5 rounded-full", opt.dot)} aria-hidden="true" />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <DurationInput
+              id="task-estimate"
+              label="Estimated time"
+              icon={<EstimateIcon className="size-4" />}
+              hours={register("estimateHours")}
+              minutes={register("estimateMinutes")}
+              maxHours={24}
+              invalid={Boolean(estimateError)}
+            />
+            <FieldError message={estimateError} />
+          </div>
+          <div className="grid gap-1.5">
+            <DurationInput
+              id="task-actual"
+              label="Actual time"
+              accent="primary"
+              icon={<ActualIcon className="size-4" />}
+              hours={register("actualHours")}
+              minutes={register("actualMinutes")}
+              maxHours={99}
+              invalid={Boolean(actualError)}
+              disabled={isRunning}
+              hint={
+                isRunning ? (
+                  <>
+                    Timer running: <span className="font-medium text-foreground tabular-nums">{formatClock(live.seconds)}</span>. Pause it to
+                    edit.
+                  </>
+                ) : isEdit ? (
+                  "Tracked by the timer. Edit to correct it."
+                ) : (
+                  "Optional: time already spent."
+                )
+              }
+            />
+            <FieldError message={actualError} />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DateInput {...fieldProps} />
+        </div>
+        <DescriptionInput {...fieldProps} />
+
+        {task && task.sessions.length > 0 && <SessionHistory sessions={task.sessions} />}
+      </div>
+
+      <div className="sticky bottom-0 flex items-center gap-2 border-t bg-popover/95 px-5 py-3.5 backdrop-blur">
+        {task && onDelete && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => {
+              onDelete(task);
+              onDone();
+            }}
+          >
+            <Trash2Icon /> Delete
+          </Button>
+        )}
+        <div className="ml-auto flex gap-2">
+          <Button type="button" variant="outline" className="h-10 px-4" onClick={onDone}>
+            Cancel
+          </Button>
+          <Button type="submit" className="h-10 px-5" disabled={pending}>
+            {pending ? "Saving…" : isEdit ? "Save changes" : "Add task"}
+          </Button>
+        </div>
+      </div>
     </form>
+  );
+}
+
+function SessionHistory({ sessions }: { sessions: TimeSession[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm font-medium outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        Session history
+        <span className="text-xs font-normal text-muted-foreground">{sessions.length}</span>
+        <ChevronDownIcon className={cn("ml-auto size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <ul className="divide-y border-t">
+          {sessions.map((s) => (
+            <SessionRow key={s.id} session={s} />
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -284,10 +364,10 @@ function SessionRow({ session }: { session: TimeSession }) {
           </label>
         </div>
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
             Cancel
           </Button>
-          <Button size="sm" onClick={save} disabled={pending}>
+          <Button type="button" size="sm" onClick={save} disabled={pending}>
             Save
           </Button>
         </div>
@@ -295,12 +375,11 @@ function SessionRow({ session }: { session: TimeSession }) {
     );
   }
 
-  const startDay = dayOf(session.started_at);
   return (
-    <li className="flex items-center gap-3 px-3 py-2.5 text-sm">
+    <li className="flex items-center gap-3 px-4 py-2.5 text-sm">
       <div className="min-w-0 flex-1">
         <p className="tabular-nums">
-          {formatDayLabel(startDay)}, {formatTime(session.started_at)} – {runningNow ? "now" : formatTime(session.ended_at!)}
+          {formatDayLabel(dayOf(session.started_at))}, {formatTime(session.started_at)} – {runningNow ? "now" : formatTime(session.ended_at!)}
         </p>
         <p className="text-xs text-muted-foreground">
           {runningNow ? "Running" : formatMinutesLong(seconds / 60)}
@@ -310,19 +389,19 @@ function SessionRow({ session }: { session: TimeSession }) {
       {!runningNow &&
         (confirming ? (
           <div className="flex items-center gap-1">
-            <Button size="sm" variant="destructive" onClick={remove} disabled={pending}>
+            <Button type="button" size="sm" variant="destructive" onClick={remove} disabled={pending}>
               <CheckIcon /> Delete
             </Button>
-            <Button size="icon-sm" variant="ghost" onClick={() => setConfirming(false)} aria-label="Keep session">
+            <Button type="button" size="icon-sm" variant="ghost" onClick={() => setConfirming(false)} aria-label="Keep session">
               <XIcon />
             </Button>
           </div>
         ) : (
           <div className="flex items-center">
-            <Button size="icon-sm" variant="ghost" onClick={() => setEditing(true)} aria-label="Edit session">
+            <Button type="button" size="icon-sm" variant="ghost" onClick={() => setEditing(true)} aria-label="Edit session">
               <PencilIcon />
             </Button>
-            <Button size="icon-sm" variant="ghost" onClick={() => setConfirming(true)} aria-label="Delete session">
+            <Button type="button" size="icon-sm" variant="ghost" onClick={() => setConfirming(true)} aria-label="Delete session">
               <Trash2Icon />
             </Button>
           </div>

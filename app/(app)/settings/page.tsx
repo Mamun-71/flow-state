@@ -4,6 +4,8 @@ import { DownloadIcon, KeyRoundIcon, LogOutIcon, ShieldCheckIcon } from "lucide-
 import { signOut } from "@/actions/auth";
 import { ThemePicker } from "@/components/theme-picker";
 import { ProfileForm } from "@/components/profile-form";
+import { PageHeader } from "@/components/page-header";
+import { SettingsIcon, UsersIcon } from "@/components/icons";
 import { getCurrentProfile } from "@/lib/data";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
@@ -22,7 +24,23 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto grid max-w-2xl gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Settings</h1>
+      <PageHeader icon={<SettingsIcon className="size-6.5" />} title="Settings" description="Profile, appearance, backup and account." />
+
+      {profile?.role === "super_admin" && (
+        <Link
+          href="/admin/users"
+          className="flex items-center gap-3 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/[0.08] to-card p-4 outline-none transition-shadow hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <span className="flex size-10 items-center justify-center rounded-xl bg-primary/12 text-primary">
+            <UsersIcon className="size-5.5" />
+          </span>
+          <span className="flex-1">
+            <span className="block font-medium">Manage users</span>
+            <span className="block text-sm text-muted-foreground">See every user&apos;s totals and add new accounts.</span>
+          </span>
+          <ShieldCheckIcon className="size-5 text-primary" aria-hidden="true" />
+        </Link>
+      )}
 
       <Section title="Profile">
         <ProfileForm displayName={profile?.display_name ?? ""} />

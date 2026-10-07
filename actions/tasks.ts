@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { dateSchema, idSchema, statusSchema, taskSchema, type TaskFormInput } from "@/lib/validation";
 import { fail, fromDbError, fromZodError, type ActionResult } from "@/lib/action-result";
 import type { TaskStatus } from "@/lib/database.types";
+import { zonedDateTime } from "@/lib/dates";
 
 type Supabase = Awaited<ReturnType<typeof requireUser>>["supabase"];
 
@@ -25,7 +26,12 @@ const subcategoryMismatch = () =>
     subcategoryId: "Pick a subcategory of this category",
   });
 
-export async function createTask(input: TaskFormInput): Promise<ActionResult<{ id: string }>> {
+/**
+ * Add (id = null) or edit a task from the task modal. Handles the status change
+ * (Done stops the timer; To Do pauses it) and an edited Actual time.
+ */
+export async function saveTask(id: string | null, input: TaskFormInput): Promise<ActionResult<{ id: string }>> {
+  if (id !== null && !idSchema.safeParse(id).success) return fail("Invalid task");
   const parsed = taskSchema.safeParse(input);
   if (!parsed.success) return fromZodError(parsed.error);
   const v = parsed.data;
@@ -33,58 +39,82 @@ export async function createTask(input: TaskFormInput): Promise<ActionResult<{ i
 
   if (!(await subcategoryMatches(supabase, v.categoryId, v.subcategoryId))) return subcategoryMismatch();
 
-  // New tasks go to the end of the To Do column.
-  const { data: last } = await supabase
-    .from("tasks")
-    .select("sort_order")
-    .eq("status", "todo")
-    .order("sort_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const fields = {
+    title: v.title,
+    category_id: v.categoryId,
+    subcategory_id: v.subcategoryId,
+    description: v.description,
+    planned_date: v.plannedDate,
+    estimated_minutes: v.estimate,
+  };
 
-  const { data, error } = await supabase
-    .from("tasks")
-    .insert({
-      title: v.title,
-      category_id: v.categoryId,
-      subcategory_id: v.subcategoryId,
-      description: v.description,
-      planned_date: v.plannedDate,
-      estimated_minutes: v.estimate,
-      sort_order: (last?.sort_order ?? -1) + 1,
-    })
-    .select("id")
-    .single();
-  if (error) return fromDbError(error, "Couldn't add the task.");
+  let taskId: string;
+  let previousStatus: TaskStatus | null = null;
+
+  if (id === null) {
+    // New tasks go to the end of their column.
+    const { data: last } = await supabase
+      .from("tasks")
+      .select("sort_order")
+      .eq("status", v.status)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({
+        ...fields,
+        status: v.status,
+        completed_at: v.status === "done" ? new Date().toISOString() : null,
+        sort_order: (last?.sort_order ?? -1) + 1,
+      })
+      .select("id")
+      .single();
+    if (error) return fromDbError(error, "Couldn't add the task.");
+    taskId = data.id;
+  } else {
+    const { data: current, error: readError } = await supabase.from("tasks").select("status").eq("id", id).single();
+    if (readError) return fromDbError(readError, "Couldn't find the task.");
+    previousStatus = current.status;
+    const { error } = await supabase.from("tasks").update(fields).eq("id", id);
+    if (error) return fromDbError(error, "Couldn't save the task.");
+    taskId = id;
+  }
+
+  // Status change
+  if (previousStatus !== null && previousStatus !== v.status) {
+    if (v.status === "done") {
+      const { error } = await supabase.rpc("complete_task", { p_task_id: taskId });
+      if (error) return fromDbError(error, "Couldn't mark the task as done.");
+    } else {
+      if (v.status === "todo") {
+        // A To Do task can't have a running timer.
+        await supabase
+          .from("time_sessions")
+          .update({ ended_at: new Date().toISOString() })
+          .eq("task_id", taskId)
+          .is("ended_at", null);
+      }
+      const { error } = await supabase.from("tasks").update({ status: v.status, completed_at: null }).eq("id", taskId);
+      if (error) return fromDbError(error, "Couldn't change the status.");
+    }
+  }
+
+  // Actual time: only when it was edited (or entered for a new task).
+  if (v.actualChanged && (id !== null || v.actual > 0)) {
+    const { error } = await supabase.rpc("set_task_actual", {
+      p_task_id: taskId,
+      p_seconds: v.actual * 60,
+      p_anchor: zonedDateTime(v.plannedDate, "09:00").toISOString(),
+    });
+    if (error) {
+      if (error.code === "P0001") return fail(error.message, { actualHours: "Pause the timer first" });
+      return fromDbError(error, "Saved, but couldn't update the actual time.");
+    }
+  }
 
   refresh();
-  return { ok: true, data: { id: data.id } };
-}
-
-export async function updateTask(id: string, input: TaskFormInput): Promise<ActionResult> {
-  if (!idSchema.safeParse(id).success) return fail("Invalid task");
-  const parsed = taskSchema.safeParse(input);
-  if (!parsed.success) return fromZodError(parsed.error);
-  const v = parsed.data;
-  const { supabase } = await requireUser();
-
-  if (!(await subcategoryMatches(supabase, v.categoryId, v.subcategoryId))) return subcategoryMismatch();
-
-  const { error } = await supabase
-    .from("tasks")
-    .update({
-      title: v.title,
-      category_id: v.categoryId,
-      subcategory_id: v.subcategoryId,
-      description: v.description,
-      planned_date: v.plannedDate,
-      estimated_minutes: v.estimate,
-    })
-    .eq("id", id);
-  if (error) return fromDbError(error, "Couldn't save the task.");
-
-  refresh();
-  return { ok: true };
+  return { ok: true, data: { id: taskId } };
 }
 
 export async function deleteTask(id: string): Promise<ActionResult> {
