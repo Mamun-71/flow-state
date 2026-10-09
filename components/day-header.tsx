@@ -122,14 +122,13 @@ function ProgressSummary({ trackedMinutes, plannedMinutes }: { trackedMinutes: n
           </dt>
           <dd className={cn("text-2xl leading-tight font-semibold tracking-tight tabular-nums", over && "text-status-over")}>
             {formatMinutes(Math.floor(trackedMinutes))}
-            <span className="ml-0.5 text-sm font-normal text-muted-foreground">h</span>
           </dd>
         </div>
         <div>
           <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <EstimateIcon className="size-3.5" /> Planned
           </dt>
-          <dd className="text-sm font-medium tabular-nums">{plannedMinutes > 0 ? `${formatMinutes(plannedMinutes)}h` : "Nothing yet"}</dd>
+          <dd className="text-sm font-medium tabular-nums">{plannedMinutes > 0 ? formatMinutes(plannedMinutes) : "Nothing yet"}</dd>
         </div>
       </dl>
     </div>

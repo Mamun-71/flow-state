@@ -72,14 +72,13 @@ export function MonthCalendarView({ cal, today }: { cal: MonthCalendar; today: s
           icon={<ActualIcon className="size-5" />}
           label="Total actual"
           value={formatMinutes(cal.totalActualSeconds / 60)}
-          unit="h"
           featured
         >
           {planRatio === null
             ? "Nothing planned this month"
-            : `${Math.round(planRatio * 100)}% of ${formatMinutes(cal.totalPlannedMinutes)}h planned`}
+            : `${Math.round(planRatio * 100)}% of ${formatMinutes(cal.totalPlannedMinutes)} planned`}
         </Tile>
-        <Tile icon={<TodayIcon className="size-5" />} label="Daily average" value={formatMinutes(average / 60)} unit="h">
+        <Tile icon={<TodayIcon className="size-5" />} label="Daily average" value={formatMinutes(average / 60)}>
           {cal.elapsedDays ? `over ${cal.elapsedDays} ${cal.elapsedDays === 1 ? "day" : "days"} so far` : "Month hasn't started"}
         </Tile>
         <Tile
@@ -94,7 +93,6 @@ export function MonthCalendarView({ cal, today }: { cal: MonthCalendar; today: s
           icon={<FlameIcon className="size-5" />}
           label="Best day"
           value={cal.bestDay ? formatMinutes(cal.bestDay.actualSeconds / 60) : "–"}
-          unit={cal.bestDay ? "h" : undefined}
         >
           {cal.bestDay ? formatDate(cal.bestDay.date, "EEEE, d MMM") : "No time tracked yet"}
         </Tile>

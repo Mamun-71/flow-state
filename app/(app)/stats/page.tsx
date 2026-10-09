@@ -27,10 +27,10 @@ export default async function StatsPage({ searchParams }: PageProps<"/stats">) {
       />
 
       <section aria-label="Summary" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile label="Tracked" value={formatMinutes(stats.totalSeconds / 60)} unit="h">
+        <Tile label="Tracked" value={formatMinutes(stats.totalSeconds / 60)}>
           <Change ratio={stats.changeRatio} previousSeconds={stats.previousSeconds} />
         </Tile>
-        <Tile label="Daily average" value={formatMinutes(stats.dailyAverageSeconds / 60)} unit="h">
+        <Tile label="Daily average" value={formatMinutes(stats.dailyAverageSeconds / 60)}>
           <span className="text-muted-foreground">across {period} days</span>
         </Tile>
         <Tile label="Tasks completed" value={String(stats.tasksCompleted)}>
@@ -107,7 +107,7 @@ function Change({ ratio, previousSeconds }: { ratio: number | null; previousSeco
         {pct > 0 ? "+" : ""}
         {pct}%
       </span>
-      vs {formatMinutes(previousSeconds / 60)}h before
+      vs {formatMinutes(previousSeconds / 60)} before
     </span>
   );
 }
