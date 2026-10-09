@@ -1,9 +1,9 @@
-/** 90 → "1h 30m", 300 → "5h 00m", 4 → "4m" */
+/** 90 → "1h : 30m", 300 → "5h : 0m", 601 → "10h : 1m", 4 → "4m" */
 export function formatMinutes(totalMinutes: number): string {
   const m = Math.max(0, Math.round(totalMinutes));
   const h = Math.floor(m / 60);
   if (h === 0) return `${m}m`;
-  return `${h}h ${String(m % 60).padStart(2, "0")}m`;
+  return `${h}h : ${m % 60}m`;
 }
 
 /** 3725 → "1:02:05", 125 → "2:05" */
