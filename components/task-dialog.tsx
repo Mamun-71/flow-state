@@ -389,7 +389,16 @@ function SessionForm({
   const [start, setStart] = useState(initialStart);
   const [end, setEnd] = useState(initialEnd);
   return (
-    <div className="grid gap-2">
+    <div
+      className="grid gap-2"
+      onKeyDown={(e) => {
+        // These inputs sit inside the task form: Enter saves the session, not the task.
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onSave(start, end);
+        }
+      }}
+    >
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="grid gap-1 text-xs">
           Start

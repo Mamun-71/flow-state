@@ -45,12 +45,15 @@ export async function updateSession(input: SessionEditInput): Promise<ActionResu
   const { start, end } = range;
 
   const { supabase } = await requireUser();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("time_sessions")
     .update({ started_at: start.toISOString(), ended_at: end.toISOString() })
     .eq("id", parsed.data.sessionId)
-    .not("ended_at", "is", null);
+    .not("ended_at", "is", null)
+    .select("id");
   if (error) return fromDbError(error, "Couldn't save the session.");
+  // RLS or a running session makes the update match nothing, without an error.
+  if (data.length === 0) return fail("Couldn't save the session. Reload and try again.");
   refresh();
   return { ok: true };
 }
@@ -58,8 +61,9 @@ export async function updateSession(input: SessionEditInput): Promise<ActionResu
 export async function deleteSession(sessionId: string): Promise<ActionResult> {
   if (!idSchema.safeParse(sessionId).success) return fail("Invalid session");
   const { supabase } = await requireUser();
-  const { error } = await supabase.from("time_sessions").delete().eq("id", sessionId);
+  const { data, error } = await supabase.from("time_sessions").delete().eq("id", sessionId).select("id");
   if (error) return fromDbError(error, "Couldn't delete the session.");
+  if (data.length === 0) return fail("Couldn't delete the session. Reload and try again.");
   refresh();
   return { ok: true };
 }
