@@ -126,6 +126,7 @@ export type DayBoard = {
   runningSince: string | null;
   /** Seconds of the running session already counted in trackedSeconds. */
   runningCountedSeconds: number;
+  /** Estimates of this day's tasks plus other days' tasks with time tracked during this day. */
   plannedMinutes: number;
 };
 
@@ -147,7 +148,7 @@ export async function getDayBoard(date: string, includeCarriedOver: boolean): Pr
       : Promise.resolve({ data: [] as Task[], error: null }),
     supabase
       .from("time_sessions")
-      .select("started_at, ended_at")
+      .select("task_id, started_at, ended_at")
       .lt("started_at", end.toISOString())
       .or(`ended_at.is.null,ended_at.gt.${start.toISOString()}`),
   ]);
@@ -169,6 +170,16 @@ export async function getDayBoard(date: string, includeCarriedOver: boolean): Pr
     }
   }
 
+  // Other days' tasks worked on during this day count toward Planned too.
+  const dayTaskIds = new Set(dayTasks.data.map((t) => t.id));
+  const otherIds = [...new Set(daySessions.data.map((s) => s.task_id))].filter((id) => !dayTaskIds.has(id));
+  let otherPlannedMinutes = 0;
+  if (otherIds.length > 0) {
+    const { data, error } = await supabase.from("tasks").select("estimated_minutes").in("id", otherIds);
+    if (error) throw error;
+    otherPlannedMinutes = data.reduce((sum, t) => sum + t.estimated_minutes, 0);
+  }
+
   const [tasks, carriedOver] = await Promise.all([
     withSessions(dayTasks.data as Task[]),
     withSessions((carried.data ?? []) as Task[]),
@@ -180,7 +191,7 @@ export async function getDayBoard(date: string, includeCarriedOver: boolean): Pr
     trackedSeconds,
     runningSince,
     runningCountedSeconds,
-    plannedMinutes: tasks.reduce((sum, t) => sum + t.estimated_minutes, 0),
+    plannedMinutes: tasks.reduce((sum, t) => sum + t.estimated_minutes, 0) + otherPlannedMinutes,
   };
 }
 
