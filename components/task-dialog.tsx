@@ -8,7 +8,8 @@ import { CheckIcon, ChevronDownIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } f
 import { toast } from "sonner";
 import { saveTask } from "@/actions/tasks";
 import { addSession, deleteSession, updateSession } from "@/actions/sessions";
-import { useTaskSeconds } from "@/hooks/use-elapsed";
+import { useElapsed, useTaskSeconds } from "@/hooks/use-elapsed";
+import { useTimer } from "@/components/timer-provider";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -267,6 +268,8 @@ function TaskForm({
 /** Read only: the sum of the sessions. Edit or add sessions below to change it. */
 function ActualTime({ task }: { task: TaskView }) {
   const { seconds, running } = useTaskSeconds(task.id, task.trackedSeconds);
+  const timer = useTimer();
+  const sessionSecondsNow = useElapsed(running ? timer.running?.startedAt : null);
   const minutes = Math.floor(seconds / 60);
   const box =
     "flex h-12 items-center justify-center rounded-xl border border-primary/15 bg-background/60 font-mono text-xl font-semibold tabular-nums dark:bg-input/20";
@@ -292,7 +295,8 @@ function ActualTime({ task }: { task: TaskView }) {
       <p className="text-xs text-muted-foreground">
         {running ? (
           <>
-            Timer running: <span className="font-medium text-foreground tabular-nums">{formatClock(seconds)}</span>
+            Timer running · this session{" "}
+            <span className="font-medium text-foreground tabular-nums">{formatClock(sessionSecondsNow)}</span>
           </>
         ) : (
           "Sum of the sessions below. Edit a session to change it."
@@ -378,11 +382,14 @@ function SessionForm({
   saveLabel,
   onSave,
   onCancel,
+  running = false,
 }: {
   initialStart: string;
   initialEnd: string;
   pending: boolean;
   saveLabel: string;
+  /** The running session: End may stay empty to keep the timer running. */
+  running?: boolean;
   onSave: (start: string, end: string) => void;
   onCancel: () => void;
 }) {
@@ -409,6 +416,11 @@ function SessionForm({
           <Input type="datetime-local" value={end} min={start} onChange={(e) => setEnd(e.target.value)} className="h-9" />
         </label>
       </div>
+      {running && (
+        <p className="text-xs text-muted-foreground">
+          Leave End empty to keep the timer running from the new start, or set it to stop the timer at that time.
+        </p>
+      )}
       <div className="flex justify-end gap-2">
         <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
           Cancel
@@ -426,7 +438,8 @@ function SessionRow({ session }: { session: TimeSession }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
   const runningNow = !session.ended_at;
-  const seconds = sessionSeconds(session.started_at, session.ended_at);
+  const live = useElapsed(runningNow ? session.started_at : null);
+  const seconds = runningNow ? live : sessionSeconds(session.started_at, session.ended_at);
 
   const save = (startedAt: string, endedAt: string) =>
     startTransition(async () => {
@@ -454,6 +467,7 @@ function SessionRow({ session }: { session: TimeSession }) {
           saveLabel="Save"
           onSave={save}
           onCancel={() => setEditing(false)}
+          running={runningNow}
         />
       </li>
     );
@@ -466,30 +480,39 @@ function SessionRow({ session }: { session: TimeSession }) {
           {formatDayLabel(dayOf(session.started_at))}, {formatTime(session.started_at)} – {runningNow ? "now" : formatTime(session.ended_at!)}
         </p>
         <p className="text-xs text-muted-foreground">
-          {runningNow ? "Running" : formatMinutesLong(seconds / 60)}
+          {runningNow ? (
+            <>
+              Running · <span className="tabular-nums">{formatClock(seconds)}</span>
+            </>
+          ) : (
+            formatMinutesLong(seconds / 60)
+          )}
           {session.source === "manual" && " · added manually"}
         </p>
       </div>
-      {!runningNow &&
-        (confirming ? (
-          <div className="flex items-center gap-1">
-            <Button type="button" size="sm" variant="destructive" onClick={remove} disabled={pending}>
-              <CheckIcon /> Delete
-            </Button>
-            <Button type="button" size="icon-sm" variant="ghost" onClick={() => setConfirming(false)} aria-label="Keep session">
-              <XIcon />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center">
-            <Button type="button" size="icon-sm" variant="ghost" onClick={() => setEditing(true)} aria-label="Edit session">
-              <PencilIcon />
-            </Button>
-            <Button type="button" size="icon-sm" variant="ghost" onClick={() => setConfirming(true)} aria-label="Delete session">
-              <Trash2Icon />
-            </Button>
-          </div>
-        ))}
+      {runningNow ? (
+        <Button type="button" size="icon-sm" variant="ghost" onClick={() => setEditing(true)} aria-label="Edit running session">
+          <PencilIcon />
+        </Button>
+      ) : confirming ? (
+        <div className="flex items-center gap-1">
+          <Button type="button" size="sm" variant="destructive" onClick={remove} disabled={pending}>
+            <CheckIcon /> Delete
+          </Button>
+          <Button type="button" size="icon-sm" variant="ghost" onClick={() => setConfirming(false)} aria-label="Keep session">
+            <XIcon />
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center">
+          <Button type="button" size="icon-sm" variant="ghost" onClick={() => setEditing(true)} aria-label="Edit session">
+            <PencilIcon />
+          </Button>
+          <Button type="button" size="icon-sm" variant="ghost" onClick={() => setConfirming(true)} aria-label="Delete session">
+            <Trash2Icon />
+          </Button>
+        </div>
+      )}
     </li>
   );
 }

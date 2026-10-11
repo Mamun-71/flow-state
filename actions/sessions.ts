@@ -37,22 +37,35 @@ export async function addSession(input: SessionAddInput): Promise<ActionResult> 
   return { ok: true };
 }
 
+/**
+ * Edit a session's start and end. With an empty end, the session must be the
+ * running one: only its start moves and the timer keeps running. Giving the
+ * running session an end stops it at that time.
+ */
 export async function updateSession(input: SessionEditInput): Promise<ActionResult> {
   const parsed = sessionEditSchema.safeParse(input);
   if (!parsed.success) return fromZodError(parsed.error);
-  const range = parseRange(parsed.data.startedAt, parsed.data.endedAt);
-  if ("ok" in range) return range;
-  const { start, end } = range;
-
+  const { sessionId, startedAt, endedAt } = parsed.data;
   const { supabase } = await requireUser();
-  const { data, error } = await supabase
-    .from("time_sessions")
-    .update({ started_at: start.toISOString(), ended_at: end.toISOString() })
-    .eq("id", parsed.data.sessionId)
-    .not("ended_at", "is", null)
-    .select("id");
+
+  let query;
+  if (endedAt === "") {
+    const start = fromLocalInput(startedAt);
+    if (Number.isNaN(start.getTime())) return fail("Pick a valid start");
+    if (start.getTime() >= Date.now()) return fail("The start must be in the past.", { startedAt: "Must be in the past" });
+    query = supabase.from("time_sessions").update({ started_at: start.toISOString() }).eq("id", sessionId).is("ended_at", null);
+  } else {
+    const range = parseRange(startedAt, endedAt);
+    if ("ok" in range) return range;
+    query = supabase
+      .from("time_sessions")
+      .update({ started_at: range.start.toISOString(), ended_at: range.end.toISOString() })
+      .eq("id", sessionId);
+  }
+
+  const { data, error } = await query.select("id");
   if (error) return fromDbError(error, "Couldn't save the session.");
-  // RLS or a running session makes the update match nothing, without an error.
+  // RLS, or a session that stopped meanwhile, makes the update match nothing, without an error.
   if (data.length === 0) return fail("Couldn't save the session. Reload and try again.");
   refresh();
   return { ok: true };

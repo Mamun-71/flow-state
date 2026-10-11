@@ -48,12 +48,12 @@ export const taskSchema = z
 export type TaskFormInput = z.input<typeof taskSchema>;
 export type TaskFormValues = z.output<typeof taskSchema>;
 
-export const sessionEditSchema = z
-  .object({
-    sessionId: uuid,
-    startedAt: z.string().min(1, "Pick a start"),
-    endedAt: z.string().min(1, "Pick an end"),
-  });
+export const sessionEditSchema = z.object({
+  sessionId: uuid,
+  startedAt: z.string().min(1, "Pick a start"),
+  /** Empty only for the running session: it keeps running from the new start. */
+  endedAt: z.string(),
+});
 export type SessionEditInput = z.input<typeof sessionEditSchema>;
 
 export const sessionAddSchema = z.object({

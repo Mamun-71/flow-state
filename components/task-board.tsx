@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { CategoryWithSubs, TaskView } from "@/lib/data";
 import type { TaskStatus } from "@/lib/database.types";
+import { dayOf } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 type Column = "todo" | "in_progress" | "done";
@@ -94,15 +95,20 @@ export function TaskBoard({
 
   const visible = all.filter((t) => !hidden.has(t.id));
   const dayTasks = visible.filter((t) => t.planned_date === date);
-  const carried = visible.filter((t) => t.planned_date < date && t.status !== "done" && date === today);
-  // Earlier days' tasks finished today join today's Done column.
-  const finishedEarlier = visible.filter((t) => t.planned_date < date && t.status === "done" && date === today);
+  // Earlier days' tasks you worked on today join In Progress; ones finished today join Done.
+  const workedToday = (t: TaskView) =>
+    t.status === "in_progress" &&
+    (running?.task.id === t.id || t.sessions.some((s) => !s.ended_at || dayOf(s.ended_at) === today));
+  const earlier = date === today ? visible.filter((t) => t.planned_date < date) : [];
+  const carried = earlier.filter((t) => t.status !== "done" && !workedToday(t));
+  const boardTasks = [...dayTasks, ...earlier.filter((t) => t.status === "done" || workedToday(t))];
   const byId = new Map(visible.map((t) => [t.id, t]));
 
   const columns: Record<Column, TaskView[]> = {
-    todo: dayTasks.filter((t) => t.status === "todo").sort(byOrder),
-    in_progress: dayTasks.filter((t) => t.status === "in_progress").sort(byOrder),
-    done: [...dayTasks.filter((t) => t.status === "done"), ...finishedEarlier]
+    todo: boardTasks.filter((t) => t.status === "todo").sort(byOrder),
+    in_progress: boardTasks.filter((t) => t.status === "in_progress").sort(byOrder),
+    done: boardTasks
+      .filter((t) => t.status === "done")
       .sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? "")),
   };
   if (dragColumns) {
@@ -287,14 +293,14 @@ export function TaskBoard({
     if (overIndex >= 0 && overIndex !== activeIndex) ids = arrayMove(ids, activeIndex, overIndex);
 
     const original = byId.get(id);
-    const before = dayTasks.filter((t) => t.status === container).sort(byOrder).map((t) => t.id);
+    const before = boardTasks.filter((t) => t.status === container).sort(byOrder).map((t) => t.id);
     if (original?.status === container && before.join() === ids.join()) return;
     saveOrder(container, ids, id);
   }
 
   const activeTask = activeId ? byId.get(activeId) : undefined;
   const dialogTask = dialog?.mode === "edit" ? byId.get(dialog.id) : undefined;
-  const isEmpty = dayTasks.length === 0 && finishedEarlier.length === 0;
+  const isEmpty = boardTasks.length === 0;
   const openAdd = () => setDialog({ mode: "add" });
 
   return (
@@ -434,7 +440,13 @@ function BoardColumn({
           transition={{ type: "spring", stiffness: 500, damping: 40 }}
         >
           {sortable && !task.id.startsWith("temp-") ? (
-            <SortableCard task={task} actions={actions} selected={selectedId === task.id} onSelect={onSelect} />
+            <SortableCard
+              task={task}
+              actions={actions}
+              selected={selectedId === task.id}
+              onSelect={onSelect}
+              showDate={task.planned_date !== date ? task.planned_date : undefined}
+            />
           ) : (
             <TaskCard
               task={task}
@@ -486,11 +498,13 @@ function SortableCard({
   actions,
   selected,
   onSelect,
+  showDate,
 }: {
   task: TaskView;
   actions: CardActions;
   selected: boolean;
   onSelect: (id: string) => void;
+  showDate?: string;
 }) {
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   return (
@@ -500,6 +514,7 @@ function SortableCard({
       {...actions}
       selected={selected}
       onSelect={onSelect}
+      showDate={showDate}
       dragging={isDragging}
       style={{ transform: CSS.Translate.toString(transform), transition, touchAction: "manipulation" }}
       {...listeners}
