@@ -4,12 +4,11 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckIcon, ChevronDownIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { saveTask } from "@/actions/tasks";
-import { deleteSession, updateSession } from "@/actions/sessions";
+import { addSession, deleteSession, updateSession } from "@/actions/sessions";
 import { useTaskSeconds } from "@/hooks/use-elapsed";
-import { useTimer } from "@/components/timer-provider";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,13 +96,7 @@ function TaskForm({
 }) {
   const isEdit = Boolean(task);
   const [pending, startTransition] = useTransition();
-  const { running } = useTimer();
-  const isRunning = Boolean(task && running?.task.id === task.id);
-  const live = useTaskSeconds(task?.id ?? "", task?.trackedSeconds ?? 0);
-
   const estimate = splitMinutes(task?.estimated_minutes ?? 0);
-  const originalActualMinutes = Math.max(0, Math.round((task?.trackedSeconds ?? 0) / 60));
-  const actual = splitMinutes(originalActualMinutes);
 
   const { register, handleSubmit, formState, control, setValue, getValues, setError } = useForm<
     TaskFormInput,
@@ -120,9 +113,6 @@ function TaskForm({
       status: task?.status ?? "todo",
       estimateHours: task ? estimate.h : "",
       estimateMinutes: task ? estimate.m : "",
-      actualHours: task ? actual.h : "",
-      actualMinutes: task ? actual.m : "",
-      actualChanged: false,
     },
   });
   const categoryId = useWatch({ control, name: "categoryId" });
@@ -149,13 +139,11 @@ function TaskForm({
   }
 
   const submit = handleSubmit((values) => {
-    // Compare against what the form opened with (dirtyFields isn't tracked unless read during render).
-    const actualChanged = isEdit ? values.actual !== originalActualMinutes : values.actual > 0;
     try {
       localStorage.setItem(LAST_CATEGORY_KEY, values.categoryId);
     } catch {}
     startTransition(async () => {
-      const result = await safe(saveTask(task?.id ?? null, { ...getValues(), actualChanged }));
+      const result = await safe(saveTask(task?.id ?? null, getValues()));
       if (result.ok) {
         toast.success(isEdit ? "Task saved" : "Task added");
         onDone();
@@ -170,7 +158,6 @@ function TaskForm({
 
   const fieldProps = { register, errors, idPrefix: "task" };
   const estimateError = errors.estimateHours?.message ?? errors.estimateMinutes?.message;
-  const actualError = errors.actualHours?.message ?? errors.actualMinutes?.message;
 
   return (
     <form onSubmit={submit} noValidate>
@@ -239,32 +226,7 @@ function TaskForm({
             />
             <FieldError message={estimateError} />
           </div>
-          <div className="grid gap-1.5">
-            <DurationInput
-              id="task-actual"
-              label="Actual time"
-              accent="primary"
-              icon={<ActualIcon className="size-4" />}
-              hours={register("actualHours")}
-              minutes={register("actualMinutes")}
-              maxHours={99}
-              invalid={Boolean(actualError)}
-              disabled={isRunning}
-              hint={
-                isRunning ? (
-                  <>
-                    Timer running: <span className="font-medium text-foreground tabular-nums">{formatClock(live.seconds)}</span>. Pause it to
-                    edit.
-                  </>
-                ) : isEdit ? (
-                  "Tracked by the timer. Edit to correct it."
-                ) : (
-                  "Optional: time already spent."
-                )
-              }
-            />
-            <FieldError message={actualError} />
-          </div>
+          {task && <ActualTime task={task} />}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -272,7 +234,7 @@ function TaskForm({
         </div>
         <DescriptionInput {...fieldProps} />
 
-        {task && task.sessions.length > 0 && <SessionHistory sessions={task.sessions} />}
+        {task && <SessionHistory taskId={task.id} sessions={task.sessions} />}
       </div>
 
       <div className="sticky bottom-0 flex items-center gap-2 border-t bg-popover/95 px-5 py-3.5 backdrop-blur">
@@ -302,27 +264,150 @@ function TaskForm({
   );
 }
 
-function SessionHistory({ sessions }: { sessions: TimeSession[] }) {
+/** Read only: the sum of the sessions. Edit or add sessions below to change it. */
+function ActualTime({ task }: { task: TaskView }) {
+  const { seconds, running } = useTaskSeconds(task.id, task.trackedSeconds);
+  const minutes = Math.floor(seconds / 60);
+  const box =
+    "flex h-12 items-center justify-center rounded-xl border border-primary/15 bg-background/60 font-mono text-xl font-semibold tabular-nums dark:bg-input/20";
+  return (
+    <div className="grid gap-2.5 rounded-2xl border border-primary/25 bg-primary/[0.04] p-3.5" aria-label={`Actual time, ${formatMinutesLong(minutes)}`}>
+      <div className="flex items-center gap-2 text-sm font-medium" aria-hidden="true">
+        <span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
+          <ActualIcon className="size-4" />
+        </span>
+        Actual time
+      </div>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5" aria-hidden="true">
+        <div className="grid gap-1">
+          <span className={box}>{Math.floor(minutes / 60)}</span>
+          <span className="text-center text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Hours</span>
+        </div>
+        <span className="-mt-5 text-xl font-semibold text-muted-foreground">:</span>
+        <div className="grid gap-1">
+          <span className={box}>{pad(minutes % 60)}</span>
+          <span className="text-center text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Minutes</span>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {running ? (
+          <>
+            Timer running: <span className="font-medium text-foreground tabular-nums">{formatClock(seconds)}</span>
+          </>
+        ) : (
+          "Sum of the sessions below. Edit a session to change it."
+        )}
+      </p>
+    </div>
+  );
+}
+
+function SessionHistory({ taskId, sessions }: { taskId: string; sessions: TimeSession[] }) {
   const [open, setOpen] = useState(false);
+  /** Default times for a new session, captured when "Add session" is pressed. */
+  const [adding, setAdding] = useState<{ start: string; end: string } | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const add = (startedAt: string, endedAt: string) =>
+    startTransition(async () => {
+      const result = await safe(addSession({ taskId, startedAt, endedAt }));
+      if (result.ok) {
+        toast.success("Session added");
+        setAdding(null);
+      } else toast.error(result.error);
+    });
+
   return (
     <div className="rounded-2xl border">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm font-medium outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        Session history
-        <span className="text-xs font-normal text-muted-foreground">{sessions.length}</span>
-        <ChevronDownIcon className={cn("ml-auto size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
+      <div className="flex items-center gap-1 pr-2">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex flex-1 items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm font-medium outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          Session history
+          <span className="text-xs font-normal text-muted-foreground">{sessions.length}</span>
+          <ChevronDownIcon className={cn("ml-auto size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+        </button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            const now = Date.now();
+            setOpen(true);
+            setAdding({ start: toLocalInput(new Date(now - 30 * 60_000).toISOString()), end: toLocalInput(new Date(now).toISOString()) });
+          }}
+          disabled={Boolean(adding)}
+        >
+          <PlusIcon /> Add session
+        </Button>
+      </div>
+      {open && (adding || sessions.length > 0) && (
         <ul className="divide-y border-t">
+          {adding && (
+            <li className="p-3">
+              <SessionForm
+                initialStart={adding.start}
+                initialEnd={adding.end}
+                pending={pending}
+                saveLabel="Add"
+                onSave={add}
+                onCancel={() => setAdding(null)}
+              />
+            </li>
+          )}
           {sessions.map((s) => (
             <SessionRow key={s.id} session={s} />
           ))}
         </ul>
       )}
+      {open && !adding && sessions.length === 0 && (
+        <p className="border-t px-4 py-3 text-xs text-muted-foreground">No sessions yet. Press play on the task, or add one.</p>
+      )}
+    </div>
+  );
+}
+
+/** Start and end inputs for one session (edit or add). */
+function SessionForm({
+  initialStart,
+  initialEnd,
+  pending,
+  saveLabel,
+  onSave,
+  onCancel,
+}: {
+  initialStart: string;
+  initialEnd: string;
+  pending: boolean;
+  saveLabel: string;
+  onSave: (start: string, end: string) => void;
+  onCancel: () => void;
+}) {
+  const [start, setStart] = useState(initialStart);
+  const [end, setEnd] = useState(initialEnd);
+  return (
+    <div className="grid gap-2">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="grid gap-1 text-xs">
+          Start
+          <Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className="h-9" />
+        </label>
+        <label className="grid gap-1 text-xs">
+          End
+          <Input type="datetime-local" value={end} min={start} onChange={(e) => setEnd(e.target.value)} className="h-9" />
+        </label>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="button" size="sm" onClick={() => onSave(start, end)} disabled={pending}>
+          {saveLabel}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -330,15 +415,13 @@ function SessionHistory({ sessions }: { sessions: TimeSession[] }) {
 function SessionRow({ session }: { session: TimeSession }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [start, setStart] = useState(() => toLocalInput(session.started_at));
-  const [end, setEnd] = useState(() => (session.ended_at ? toLocalInput(session.ended_at) : ""));
   const [pending, startTransition] = useTransition();
   const runningNow = !session.ended_at;
   const seconds = sessionSeconds(session.started_at, session.ended_at);
 
-  const save = () =>
+  const save = (startedAt: string, endedAt: string) =>
     startTransition(async () => {
-      const result = await safe(updateSession({ sessionId: session.id, startedAt: start, endedAt: end }));
+      const result = await safe(updateSession({ sessionId: session.id, startedAt, endedAt }));
       if (result.ok) {
         toast.success("Session updated");
         setEditing(false);
@@ -354,25 +437,15 @@ function SessionRow({ session }: { session: TimeSession }) {
 
   if (editing) {
     return (
-      <li className="grid gap-2 p-3">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="grid gap-1 text-xs">
-            Start
-            <Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className="h-9" />
-          </label>
-          <label className="grid gap-1 text-xs">
-            End
-            <Input type="datetime-local" value={end} min={start} onChange={(e) => setEnd(e.target.value)} className="h-9" />
-          </label>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
-            Cancel
-          </Button>
-          <Button type="button" size="sm" onClick={save} disabled={pending}>
-            Save
-          </Button>
-        </div>
+      <li className="p-3">
+        <SessionForm
+          initialStart={toLocalInput(session.started_at)}
+          initialEnd={session.ended_at ? toLocalInput(session.ended_at) : ""}
+          pending={pending}
+          saveLabel="Save"
+          onSave={save}
+          onCancel={() => setEditing(false)}
+        />
       </li>
     );
   }

@@ -95,13 +95,14 @@ export function TaskBoard({
   const visible = all.filter((t) => !hidden.has(t.id));
   const dayTasks = visible.filter((t) => t.planned_date === date);
   const carried = visible.filter((t) => t.planned_date < date && t.status !== "done" && date === today);
+  // Earlier days' tasks finished today join today's Done column.
+  const finishedEarlier = visible.filter((t) => t.planned_date < date && t.status === "done" && date === today);
   const byId = new Map(visible.map((t) => [t.id, t]));
 
   const columns: Record<Column, TaskView[]> = {
     todo: dayTasks.filter((t) => t.status === "todo").sort(byOrder),
     in_progress: dayTasks.filter((t) => t.status === "in_progress").sort(byOrder),
-    done: dayTasks
-      .filter((t) => t.status === "done")
+    done: [...dayTasks.filter((t) => t.status === "done"), ...finishedEarlier]
       .sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? "")),
   };
   if (dragColumns) {
@@ -293,7 +294,7 @@ export function TaskBoard({
 
   const activeTask = activeId ? byId.get(activeId) : undefined;
   const dialogTask = dialog?.mode === "edit" ? byId.get(dialog.id) : undefined;
-  const isEmpty = dayTasks.length === 0;
+  const isEmpty = dayTasks.length === 0 && finishedEarlier.length === 0;
   const openAdd = () => setDialog({ mode: "add" });
 
   return (
@@ -304,7 +305,7 @@ export function TaskBoard({
           <p className="text-sm text-muted-foreground">
             {dayTasks.length === 0
               ? "Nothing planned yet"
-              : `${columns.done.length} of ${dayTasks.length} done`}
+              : `${dayTasks.filter((t) => t.status === "done").length} of ${dayTasks.length} done`}
           </p>
         </div>
         <Button onClick={openAdd} className="ml-auto h-11 gap-2 rounded-xl px-4 text-sm shadow-md shadow-primary/20">
@@ -370,6 +371,7 @@ export function TaskBoard({
                     actions={actions}
                     selectedId={selectedId}
                     onSelect={setSelectedId}
+                    date={date}
                   />
                 ))}
               </div>
@@ -407,6 +409,7 @@ function BoardColumn({
   actions,
   selectedId,
   onSelect,
+  date,
 }: {
   column: (typeof COLUMNS)[number];
   tasks: TaskView[];
@@ -415,6 +418,7 @@ function BoardColumn({
   actions: CardActions;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  date: string;
 }) {
   const sortable = column.id !== "done";
   const { setNodeRef, isOver } = useDroppable({ id: column.id, disabled: !sortable });
@@ -432,7 +436,14 @@ function BoardColumn({
           {sortable && !task.id.startsWith("temp-") ? (
             <SortableCard task={task} actions={actions} selected={selectedId === task.id} onSelect={onSelect} />
           ) : (
-            <TaskCard task={task} {...actions} onMove={undefined} selected={selectedId === task.id} onSelect={onSelect} />
+            <TaskCard
+              task={task}
+              {...actions}
+              onMove={undefined}
+              selected={selectedId === task.id}
+              onSelect={onSelect}
+              showDate={task.planned_date !== date ? task.planned_date : undefined}
+            />
           )}
         </motion.div>
       ))}

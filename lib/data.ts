@@ -118,6 +118,7 @@ async function withSessions(tasks: Task[]): Promise<TaskView[]> {
 
 export type DayBoard = {
   tasks: TaskView[];
+  /** Earlier days' tasks: unfinished ones, plus ones finished during this day (shown under Done). */
   carriedOver: TaskView[];
   /** Seconds tracked during this day (any task), running timer counted up to now. */
   trackedSeconds: number;
@@ -140,7 +141,7 @@ export async function getDayBoard(date: string, includeCarriedOver: boolean): Pr
           .from("tasks")
           .select(TASK_SELECT)
           .lt("planned_date", date)
-          .neq("status", "done")
+          .or(`status.neq.done,completed_at.gte.${start.toISOString()}`)
           .order("planned_date")
           .order("sort_order")
       : Promise.resolve({ data: [] as Task[], error: null }),

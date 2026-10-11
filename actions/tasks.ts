@@ -6,7 +6,6 @@ import { requireUser } from "@/lib/supabase/server";
 import { dateSchema, idSchema, statusSchema, taskSchema, type TaskFormInput } from "@/lib/validation";
 import { fail, fromDbError, fromZodError, type ActionResult } from "@/lib/action-result";
 import type { TaskStatus } from "@/lib/database.types";
-import { zonedDateTime } from "@/lib/dates";
 
 type Supabase = Awaited<ReturnType<typeof requireUser>>["supabase"];
 
@@ -28,7 +27,7 @@ const subcategoryMismatch = () =>
 
 /**
  * Add (id = null) or edit a task from the task modal. Handles the status change
- * (Done stops the timer; To Do pauses it) and an edited Actual time.
+ * (Done stops the timer; To Do pauses it). Actual time comes from the sessions.
  */
 export async function saveTask(id: string | null, input: TaskFormInput): Promise<ActionResult<{ id: string }>> {
   if (id !== null && !idSchema.safeParse(id).success) return fail("Invalid task");
@@ -97,19 +96,6 @@ export async function saveTask(id: string | null, input: TaskFormInput): Promise
       }
       const { error } = await supabase.from("tasks").update({ status: v.status, completed_at: null }).eq("id", taskId);
       if (error) return fromDbError(error, "Couldn't change the status.");
-    }
-  }
-
-  // Actual time: only when it was edited (or entered for a new task).
-  if (v.actualChanged && (id !== null || v.actual > 0)) {
-    const { error } = await supabase.rpc("set_task_actual", {
-      p_task_id: taskId,
-      p_seconds: v.actual * 60,
-      p_anchor: zonedDateTime(v.plannedDate, "09:00").toISOString(),
-    });
-    if (error) {
-      if (error.code === "P0001") return fail(error.message, { actualHours: "Pause the timer first" });
-      return fromDbError(error, "Saved, but couldn't update the actual time.");
     }
   }
 
