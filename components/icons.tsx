@@ -151,3 +151,15 @@ export function FlameIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Tasks: a stack of cards, the top one checked. */
+export function TasksIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.5" y="7.5" width="14" height="13" rx="3" {...tint} />
+      <rect x="3.5" y="7.5" width="14" height="13" rx="3" />
+      <path d="M7.5 4.5h10a3 3 0 0 1 3 3v9" />
+      <path d="m7.5 14 2 2 4-4.5" />
+    </Icon>
+  );
+}

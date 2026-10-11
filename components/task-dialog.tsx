@@ -102,7 +102,8 @@ function TaskForm({
   const live = useTaskSeconds(task?.id ?? "", task?.trackedSeconds ?? 0);
 
   const estimate = splitMinutes(task?.estimated_minutes ?? 0);
-  const actual = splitMinutes((task?.trackedSeconds ?? 0) / 60);
+  const originalActualMinutes = Math.max(0, Math.round((task?.trackedSeconds ?? 0) / 60));
+  const actual = splitMinutes(originalActualMinutes);
 
   const { register, handleSubmit, formState, control, setValue, getValues, setError } = useForm<
     TaskFormInput,
@@ -148,7 +149,8 @@ function TaskForm({
   }
 
   const submit = handleSubmit((values) => {
-    const actualChanged = Boolean(formState.dirtyFields.actualHours || formState.dirtyFields.actualMinutes);
+    // Compare against what the form opened with (dirtyFields isn't tracked unless read during render).
+    const actualChanged = isEdit ? values.actual !== originalActualMinutes : values.actual > 0;
     try {
       localStorage.setItem(LAST_CATEGORY_KEY, values.categoryId);
     } catch {}

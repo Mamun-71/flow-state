@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
-import { CalendarIcon, CategoriesIcon, SettingsIcon, StatsIcon, TodayIcon, UsersIcon } from "@/components/icons";
+import { CalendarIcon, CategoriesIcon, SettingsIcon, StatsIcon, TasksIcon, TodayIcon, UsersIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/", label: "Today", icon: TodayIcon },
+  { href: "/tasks", label: "Tasks", icon: TasksIcon },
   { href: "/calendar", label: "Calendar", icon: CalendarIcon },
   { href: "/stats", label: "Stats", icon: StatsIcon },
   { href: "/categories", label: "Categories", icon: CategoriesIcon },
@@ -67,7 +68,7 @@ export function AppHeader({ isAdmin, name }: { isAdmin: boolean; name: string })
   );
 }
 
-/** Mobile: five thumb-reachable tabs. The admin Users page is linked from Settings. */
+/** Mobile: six thumb-reachable tabs. The admin Users page is linked from Settings. */
 export function BottomNav() {
   const pathname = usePathname();
   return (
@@ -75,7 +76,7 @@ export function BottomNav() {
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
     >
-      <ul className="grid h-16 grid-cols-5">
+      <ul className="grid h-16 grid-cols-6">
         {LINKS.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           return (

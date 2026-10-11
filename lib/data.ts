@@ -199,3 +199,32 @@ export async function getAdminUsers(): Promise<AdminUserRow[]> {
   if (error) throw error;
   return data ?? [];
 }
+
+export const TASKS_PAGE_SIZE = 12;
+
+export type TaskPage = { tasks: TaskView[]; total: number; page: number; pageCount: number };
+
+/** Every task, newest planned date first, one page at a time. */
+export async function getTaskPage(page: number): Promise<TaskPage> {
+  const supabase = await createClient();
+  const from = (page - 1) * TASKS_PAGE_SIZE;
+  const { data, count, error } = await supabase
+    .from("tasks")
+    .select(TASK_SELECT, { count: "exact" })
+    .order("planned_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(from, from + TASKS_PAGE_SIZE - 1);
+  if (error?.code === "PGRST103") {
+    // Page past the end: report the real total so the page can redirect.
+    const { count: total } = await supabase.from("tasks").select("id", { count: "exact", head: true });
+    return { tasks: [], total: total ?? 0, page, pageCount: Math.max(1, Math.ceil((total ?? 0) / TASKS_PAGE_SIZE)) };
+  }
+  if (error) throw error;
+  const total = count ?? 0;
+  return {
+    tasks: await withSessions(data as Task[]),
+    total,
+    page,
+    pageCount: Math.max(1, Math.ceil(total / TASKS_PAGE_SIZE)),
+  };
+}
