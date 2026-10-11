@@ -6,7 +6,7 @@ export type CalendarDay = {
   date: string;
   /** Seconds actually tracked on this day (any task). */
   actualSeconds: number;
-  /** Sum of estimates of tasks planned for this day. */
+  /** Estimates of tasks planned for this day, plus other days' tasks with time tracked on it (like the Today header). */
   plannedMinutes: number;
   tasksPlanned: number;
   tasksDone: number;
@@ -46,12 +46,12 @@ export async function getMonthCalendar(month: string): Promise<MonthCalendar> {
   const [sessionsRes, tasksRes] = await Promise.all([
     supabase
       .from("time_sessions")
-      .select("started_at, ended_at")
+      .select("task_id, started_at, ended_at")
       .lt("started_at", end.toISOString())
       .or(`ended_at.is.null,ended_at.gt.${start.toISOString()}`),
     supabase
       .from("tasks")
-      .select("planned_date, estimated_minutes, status")
+      .select("id, planned_date, estimated_minutes, status")
       .gte("planned_date", firstDay)
       .lte("planned_date", lastDay),
   ]);
@@ -64,11 +64,16 @@ export async function getMonthCalendar(month: string): Promise<MonthCalendar> {
   }
 
   const now = new Date();
+  /** Day → tasks with time tracked on it. */
+  const workedOn = new Map<string, Set<string>>();
   for (const s of sessionsRes.data) {
     const sEnd = s.ended_at ? new Date(s.ended_at) : now;
     for (const part of splitByDay(new Date(s.started_at), sEnd, start, end)) {
       const day = byDay.get(part.day);
-      if (day) day.actualSeconds += part.seconds;
+      if (!day) continue;
+      day.actualSeconds += part.seconds;
+      if (!workedOn.has(part.day)) workedOn.set(part.day, new Set());
+      workedOn.get(part.day)!.add(s.task_id);
     }
   }
   for (const t of tasksRes.data) {
@@ -77,6 +82,22 @@ export async function getMonthCalendar(month: string): Promise<MonthCalendar> {
     day.plannedMinutes += t.estimated_minutes;
     day.tasksPlanned += 1;
     if (t.status === "done") day.tasksDone += 1;
+  }
+
+  // Tasks worked on a day they weren't planned for add their estimate to that day too.
+  const plannedFor = new Map(tasksRes.data.map((t) => [t.id, t]));
+  const missing = [...new Set(sessionsRes.data.map((s) => s.task_id))].filter((id) => !plannedFor.has(id));
+  if (missing.length > 0) {
+    const { data, error } = await supabase.from("tasks").select("id, planned_date, estimated_minutes, status").in("id", missing);
+    if (error) throw error;
+    for (const t of data) plannedFor.set(t.id, t);
+  }
+  for (const [date, ids] of workedOn) {
+    const day = byDay.get(date)!;
+    for (const id of ids) {
+      const t = plannedFor.get(id);
+      if (t && t.planned_date !== date) day.plannedMinutes += t.estimated_minutes;
+    }
   }
 
   const days = [...byDay.values()];
@@ -94,7 +115,8 @@ export async function getMonthCalendar(month: string): Promise<MonthCalendar> {
     lastDay,
     days,
     totalActualSeconds: days.reduce((s, d) => s + d.actualSeconds, 0),
-    totalPlannedMinutes: days.reduce((s, d) => s + d.plannedMinutes, 0),
+    // Each task once: planned this month, or worked on this month.
+    totalPlannedMinutes: [...plannedFor.values()].reduce((s, t) => s + t.estimated_minutes, 0),
     activeDays: days.filter((d) => d.actualSeconds >= 60).length,
     elapsedDays,
     tasksDone: days.reduce((s, d) => s + d.tasksDone, 0),

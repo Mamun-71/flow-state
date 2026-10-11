@@ -119,6 +119,14 @@ export function MonthCalendarView({ cal, today }: { cal: MonthCalendar; today: s
           ))}
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground">
+          <span className="mr-auto inline-flex items-center gap-3">
+            <span className="inline-flex items-center gap-1">
+              <ActualIcon className="size-3.5 text-primary" aria-hidden="true" /> Actual
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <EstimateIcon className="size-3.5" aria-hidden="true" /> Planned
+            </span>
+          </span>
           <span>Less</span>
           {LEVELS.map((l) => (
             <span key={l.label} className="inline-flex items-center gap-1.5">
@@ -176,18 +184,23 @@ function DayCell({ day, today }: { day: CalendarDay; today: string }) {
       <div className="mt-auto">
         {hasTime ? (
           <>
-            <p className="text-center text-[11px] leading-none font-semibold tabular-nums sm:text-left sm:text-base">
+            <p className="flex items-center justify-center gap-1 text-[11px] leading-none font-semibold tabular-nums sm:justify-start sm:text-base">
+              <ActualIcon className="hidden size-4 shrink-0 text-primary sm:block" aria-hidden="true" />
               <span className="sm:hidden">{(day.actualSeconds / 3600).toFixed(1)}h</span>
               <span className="hidden sm:inline">{formatMinutesLong(day.actualSeconds / 60)}</span>
             </p>
             {day.plannedMinutes > 0 && (
-              <p className="mt-1 hidden text-[11px] text-muted-foreground tabular-nums sm:block">
-                of {formatMinutesLong(day.plannedMinutes)}
+              <p className="mt-1 hidden items-center gap-1 text-[11px] text-muted-foreground tabular-nums sm:flex">
+                <EstimateIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                {formatMinutesLong(day.plannedMinutes)}
               </p>
             )}
           </>
         ) : day.plannedMinutes > 0 ? (
-          <p className="hidden text-[11px] text-muted-foreground tabular-nums sm:block">{formatMinutesLong(day.plannedMinutes)} planned</p>
+          <p className="hidden items-center gap-1 text-[11px] text-muted-foreground tabular-nums sm:flex">
+            <EstimateIcon className="size-3.5 shrink-0" aria-hidden="true" />
+            {formatMinutesLong(day.plannedMinutes)} planned
+          </p>
         ) : null}
         {day.plannedMinutes > 0 && (
           <div className="mt-1.5 hidden h-1 overflow-hidden rounded-full bg-foreground/10 sm:block" aria-hidden="true">
